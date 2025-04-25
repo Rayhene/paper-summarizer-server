@@ -11,7 +11,6 @@ nltk.download('wordnet')
 nltk.download('omw-1.4')
 
 def resumir_local(texto: str, num_frases: int = 5) -> str:
-    print('entrou no resumir local', texto)
     # Tokenização das sentenças
     sentencas = nltk.sent_tokenize(texto, language='portuguese')
 

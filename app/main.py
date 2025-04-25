@@ -28,7 +28,6 @@ app = FastAPI()
 @app.post("/resumir-pdf/")
 async def resumir_pdf(file: UploadFile = File(...)):
     try:
-        print('entrou no try')
         if not file.filename.endswith(".pdf"):
             raise HTTPException(status_code=400, detail="Somente arquivos PDF são aceitos.")
 
