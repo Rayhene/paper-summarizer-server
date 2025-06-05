@@ -7,7 +7,7 @@ from .utils import extrair_texto_pdf
 from dotenv import load_dotenv
 import os
 import requests 
-
+import re
 
 load_dotenv() 
 
@@ -19,32 +19,10 @@ headers = {
     'Content-Type': 'application/json'
 }
 
-# Carregar o modelo spaCy
 nlp_spacy = spacy.load("pt_core_news_sm")
 
-# Criar uma instância FastAPI
 app = FastAPI()
 
-@app.post("/resumir-pdf/")
-async def resumir_pdf(file: UploadFile = File(...)):
-    try:
-        if not file.filename.endswith(".pdf"):
-            raise HTTPException(status_code=400, detail="Somente arquivos PDF são aceitos.")
-
-        conteudo = await file.read()
-        texto_extraido = extrair_texto_pdf(conteudo)
-
-        if not texto_extraido.strip():
-            raise HTTPException(status_code=400, detail="Não foi possível extrair texto do PDF.")
-
-        texto_limitado = texto_extraido[:10000]  
-
-        resumo = resumir_local(texto_limitado)
-        return {"resumo": resumo}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar resumo: {str(e)}")
-    
 
 @app.post("/resumir-pdf-ia/")
 async def resumir_pdf_ia(file: UploadFile = File(...)):
@@ -58,7 +36,26 @@ async def resumir_pdf_ia(file: UploadFile = File(...)):
         if not texto_extraido.strip():
             raise HTTPException(status_code=400, detail="Não foi possível extrair texto do PDF.")
 
-        prompt = f"Resuma o seguinte texto em português de forma clara e objetiva:\n\n{texto_extraido[:10000]}"  # Limitando tamanho
+
+        def dividir_em_chunks(texto, tamanho=4000):
+            return [texto[i:i + tamanho] for i in range(0, len(texto), tamanho)]
+        
+        chunks = dividir_em_chunks(texto_extraido)
+
+        print(f"🔹 Total de chunks criados: {len(chunks)}")
+
+        texto_completo = "\n\n".join(chunks)
+
+
+        prompt = (
+            f"Você é um assistente especializado em leitura e resumo de artigos científicos.\n\n"
+            f"A seguir está o conteúdo completo de um artigo dividido em partes:\n\n{texto_completo}\n\n"
+            f"Gere um resumo estruturado com as seções:\n"
+            f"- Introdução\n- Metodologia\n- Resultados\n- Discussão\n- Conclusão\n\n"
+            f"O resumo deve ser objetivo e conter apenas as informações mais relevantes."
+        )
+        
+        print(f"📤 Enviando prompt para o modelo... Tamanho: {len(prompt)} caracteres")
 
         data = {
             "model": "deepseek/deepseek-chat:free",
@@ -73,7 +70,11 @@ async def resumir_pdf_ia(file: UploadFile = File(...)):
         if response.status_code == 200:
             resposta_json = response.json()
             resumo = resposta_json['choices'][0]['message']['content'].strip()
-            return {"resumo": resumo}
+
+            resumo_estruturado = resumo.replace("### Resumo Estruturado", "").strip()
+            print("Texto markdown:", resumo_estruturado)
+            return {"resumo": resumo_estruturado}
+
         else:
             print("Erro:", response.text)
             raise HTTPException(status_code=500, detail="Erro ao chamar a API do OpenRouter.")
@@ -85,3 +86,17 @@ async def resumir_pdf_ia(file: UploadFile = File(...)):
 @app.get("/")
 def read_root():
     return {"message": "API de resumo de artigos científicos está funcionando!"}
+
+
+def parse_resumo_estruturado(texto_markdown):
+    print(f"🔹 Texto markdown: {texto_markdown}")
+    secoes = {}
+    
+    matches = re.split(r"###\s+(.*?)\n", texto_markdown)
+
+    for i in range(1, len(matches), 2):
+        titulo = matches[i].strip()
+        conteudo = matches[i + 1].strip() if i + 1 < len(matches) else ""
+        secoes[titulo.lower()] = conteudo
+
+    return secoes
