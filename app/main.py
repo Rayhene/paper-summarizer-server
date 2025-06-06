@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 import os
 import requests 
 import re
+from fastapi.middleware.cors import CORSMiddleware
+
 
 load_dotenv() 
 
@@ -22,6 +24,14 @@ headers = {
 nlp_spacy = spacy.load("pt_core_news_sm")
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.post("/resumir-pdf-ia/")
